@@ -1,4 +1,4 @@
-struct Node {
+class Node {
     i32 id;
 }
 

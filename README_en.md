@@ -8,7 +8,7 @@ Cyly cares more about what a program actually does than about how many details i
 
 ## Core design
 
-- **Value semantics and predictable layout**: Structs, classes, and fixed-size arrays are copied on assignment and when passed by value. Objects contain only fields and alignment padding, and fixed-size arrays never decay into pointers implicitly.
+- **Value semantics and predictable layout**: Class objects and fixed-size arrays are copied on assignment and when passed by value. Objects contain only fields and alignment padding, and fixed-size arrays never decay into pointers implicitly.
 - **Explicit memory and pointers**: No built-in GC, ARC, or RAII, and no implicit heap allocation. Raw pointer operations require no `unsafe` block; lifetimes, bounds, and pointer validity are the author's responsibility.
 - **Inline unions and bit reinterpretation**: Unions use a type tag and inline storage without implicit heap boxing. `typeof` queries the active member, `.as()` reads explicitly as a target type, and optimization does not rely on type-based strict aliasing assumptions.
 - **Static dispatch and explicit polymorphism**: Inheritance and method overriding bind through the receiver's static type, with no implicit vtable pointer. Runtime polymorphism is expressed through unions or explicit function pointers.
@@ -20,7 +20,7 @@ Cyly cares more about what a program actually does than about how many details i
 The [`examples/`](examples/README.md) directory explores these decisions by topic, with bilingual Chinese-English code comments. The examples describe the intended language rather than the current implementation status.
 
 - [Arrays and pointers](examples/arrays-and-pointers.cy): Array copies, array pointers versus first-element pointers, and indexing without runtime bounds checks.
-- [Unions](examples/unions.cy): How `.as()` separates numeric conversion from bit reinterpretation, and how pointer constructors bind within union types.
+- [Unions](examples/unions.cy): How `.as()` reads union storage as a target type, and how pointer constructors bind within union types.
 - [Named control flow](examples/control-flow.cy): Cross-level `continue` and `break` from a named `if`.
 - [Explicit memory and exceptions](examples/memory-and-exceptions.md): Arena lifetimes, exceptions passed by value, and explicit cleanup on normal and exceptional paths.
 - [Method organization and static dispatch](examples/impl-organization.md): Comparing in-type methods with same-file external `impl` blocks, including inheritance and static binding.

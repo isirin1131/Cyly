@@ -11,14 +11,14 @@ Cyly 允许把一个类型的方法集中写在类内，也允许通过外部 `i
 
 两版是替代写法，每一版都完整提供这四个实现，不能将两版重复加入同一个程序。
 
-本文是语言设计示例，采用 `struct`、`impl Type.method` 和显式 `self` 写法；当前编译器尚未实现这些能力。示例采用单文件模块：每个类型的定义及其外部 `impl` 均位于同一源文件，不能跨文件为外部类型追加方法。
+本文是语言设计示例，采用 `class`、`impl Type.method` 和显式 `self` 写法；当前编译器尚未实现这些能力。示例采用单文件模块：每个类型的定义及其外部 `impl` 均位于同一源文件，不能跨文件为外部类型追加方法。
 
 ## 按行：围绕一种类型组织
 
 阅读 `Circle` 时，就能看到圆的数据和两项操作；矩形也一样。
 
 ```cy
-struct Circle {
+class Circle {
     f64 radius;
 
     func area(Circle self) -> f64 {
@@ -30,7 +30,7 @@ struct Circle {
     }
 }
 
-struct Rect {
+class Rect {
     f64 width;
     f64 height;
 
@@ -44,18 +44,18 @@ struct Rect {
 }
 ```
 
-这种排列方便新增形状：定义新结构体，并集中写出它支持的操作。已有圆和矩形的代码不用挪动。
+这种排列方便新增形状：定义新类，并集中写出它支持的操作。已有圆和矩形的代码不用挪动。
 
 ## 按列：围绕一种操作组织
 
 先定义数据，再把所有面积实现放在一起，所有周长实现放在一起。
 
 ```cy
-struct Circle {
+class Circle {
     f64 radius;
 }
 
-struct Rect {
+class Rect {
     f64 width;
     f64 height;
 }
@@ -94,7 +94,7 @@ impl Rect.perimeter(Rect self) -> f64 {
 在任意一版后增加：
 
 ```cy
-struct NamedCircle extends Circle {
+class NamedCircle extends Circle {
     string name;
 }
 ```

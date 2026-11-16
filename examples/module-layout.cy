@@ -1,7 +1,7 @@
 // This file is one module; top-level items are declarations, not statements. / 本文件即一个模块；顶层只放置声明，不执行语句。
 i32 default_limit = 4;
 
-struct Counter {
+class Counter {
     i32 value;
 }
 

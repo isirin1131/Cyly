@@ -7,7 +7,7 @@ Cyly 不内建 GC、ARC、RAII、`new` 或 `delete`。声明、赋值、传参�
 ## 区域分配与显式清理
 
 ```cy
-struct Node {
+class Node {
     i32 id;
 }
 
