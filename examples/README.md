@@ -1,6 +1,6 @@
 # Cyly 示例
 
-这些示例按[已定语言设计](../DESIGN_DECISIONS.md)组织，优先展示目标语言而非当前实现进度。当前 `make run` 仅用于词法读取；部分新语法尚未进入词法器，示例不能全部视为当前可执行程序。
+这些示例按[语言规范草案](../docs/language-spec.typ)组织，优先展示目标语言而非当前实现进度。当前 `make run` 仅用于词法读取；部分新语法尚未进入词法器，示例不能全部视为当前可执行程序。
 
 - [hello.cy](hello.cy)：`main`、显式类型、内建 `print`、中文注释与单语句 `if`。
 - [arrays-and-pointers.cy](arrays-and-pointers.cy)：定长数组的纯值语义、重复填充、数组指针、首元素指针、后缀解引用与无运行期检查的下标。
