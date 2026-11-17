@@ -34,3 +34,5 @@ Cyly 更在意程序实际做了什么，而不是语法表面隐藏了多少细
 ## 设计文档
 
 [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md) 是语言语义、语法和运行时规则的权威记录。
+
+[语言规范草案](docs/language-spec.typ) 按同一章节顺序展开 EBNF、静态约束、运行语义、诊断与示例，并区分已定规则、候选补充和实现约定。使用 Typst 运行 `make docs` 可生成 [PDF](output/pdf/cyly-language-spec.pdf)；需要可用的中文字体，详见规范末尾的构建说明。

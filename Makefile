@@ -3,9 +3,12 @@
 BUILD_DIR ?= build
 BUILD_TYPE ?= debug
 FILE ?= examples/hello.cy
+TYPST ?= typst
+TYPST_FLAGS ?=
+SPEC_PDF := output/pdf/cyly-language-spec.pdf
 
 .DEFAULT_GOAL := build
-.PHONY: help build test run setup reconfigure release clean
+.PHONY: help build test run setup reconfigure release clean docs
 
 help: ## 显示所有命令
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-12s %s\n", $$1, $$2}'
@@ -21,6 +24,10 @@ build: $(BUILD_DIR)/build.ninja ## 编译（默认目标）
 
 test: $(BUILD_DIR)/build.ninja ## 编译并运行全部测试
 	meson test -C $(BUILD_DIR) --print-errorlogs
+
+docs: ## 用 Typst 渲染语言规范 PDF（需要中文字体）
+	mkdir -p output/pdf
+	$(TYPST) compile $(TYPST_FLAGS) docs/language-spec.typ $(SPEC_PDF)
 
 run: build ## 运行 cyly（可指定文件：make run FILE=xxx.cy）
 	./$(BUILD_DIR)/cyly $(FILE)

@@ -34,3 +34,5 @@ The initial language design is complete, but a full compiler implementation has 
 ## Design document
 
 [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md) is the authoritative record of the language's syntax, semantics, and runtime rules (in Chinese).
+
+The [language specification draft](docs/language-spec.typ) (in Chinese) expands the same chapter structure into EBNF, static constraints, runtime semantics, diagnostics, and examples. It distinguishes settled rules, proposed additions, and implementation conventions. Run `make docs` with Typst and Chinese fonts installed to render the [PDF](output/pdf/cyly-language-spec.pdf); build notes are included at the end of the specification.
