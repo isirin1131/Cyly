@@ -170,14 +170,22 @@ string bad = "\q";        // 错误：未知转义
 ```ebnf
 TypeDecl = "typedef", Identifier, "=", TypeExpr, ";";
 TypeExpr = PrefixType, { "|", PrefixType };
-PrefixType = "*", PrefixType
+PrefixType = "*", PointeeType
            | "[", ConstExpr, "]", PrefixType
            | TypeAtom;
+PointeeType = PrefixType | ClassName;
 TypeAtom = TypeName | LiteralType | "(", TypeExpr, ")"
          | ObjectType | FunctionPointerType;
+TypeName = Identifier;
+ClassName = Identifier;
+DeclType = TypeExpr | ClassName;
 ```
 
-#proposal[括号类型用于明确构造边界。`TypeName` 指解析后处于类型位置的名字；对象类型文字的具体产生式仍待补充。函数指针类型见第 10 章。]
+#proposal[括号类型用于明确构造边界。`TypeName` 指经名字解析为内建基础类型或 `typedef` 别名的名字，`ClassName` 指经名字解析为 `class` 的名字，两者互不包含。对象类型文字的具体产生式仍待补充。函数指针类型见第 10 章。]
+
+*类不属于类型系统。*类名不是 `TypeName`，不能作为 `TypeAtom` 出现。类型表达式中只有两处可以写类名。其一是指针的被指对象：`*Node` 是指针类型，可以继续参与类型构造，例如 `*Node | null` 和 `[4]*Node`。其二是函数指针类型的参数与返回位置，例如 `*func(Circle) -> f64`，它描述的是函数签名而不是把类对象存入类型。因此类对象不能作联合成员、数组元素或 `typedef` 结构对象的字段，类名也不能作 `typedef` 的右侧；`Node | null`、`[4]Node` 均不合法。本章的透明别名、结构兼容与联合归一化，以及第 4 章的 `typeof` 与 `.as()`，都不适用于类对象。
+
+类对象作为值只出现在 `DeclType` 允许的位置：变量、参数、返回值，以及第 7 章的子类到父类转换。两个类即使字段完全相同也互不相通；类对象与 `typedef` 结构对象之间不相通，也不存在转换。
 
 前缀 `*`、`[N]` 的结合优先级高于 `|`。因此 `*T | null` 表示指向 T 的指针与 null 的联合；`[4]i32 | null` 表示整个数组与 null 的联合。`N` 必须是编译期正整数常量，零、负数和运行期值均不合法。
 
@@ -233,7 +241,7 @@ FieldInit = Identifier, ":", Expr;
 类型、变量和函数共用名字空间；同一作用域内同名声明报错，包括顶层。内层可以遮蔽外层同名变量。不得引用尚未定义的变量；模块级函数具有第 9 章规定的全模块可见性。
 
 ```ebnf
-VariableDecl = TypeExpr, Identifier, "=", Expr, ";";
+VariableDecl = DeclType, Identifier, "=", Expr, ";";
 ```
 
 变量采用 C 式显式类型声明，不提供 `var`，不推断变量类型。局部变量必须在声明时显式初始化；模块变量还必须满足常量初始化规则。对基础类型和用户类型一视同仁，不生成默认零值，也不因类型声明而自动调用 `init`。
@@ -426,24 +434,24 @@ Arguments = Expr, { ",", Expr };
 Primary = Identifier | Literal | ArrayLiteral | ObjectLiteral
         | CastExpr | ClassInitExpr | SuperCallExpr | SuperInitExpr
         | "(", Expr, ")" | "typeof", "(", Identifier, ")";
-CastExpr = TypeExpr, "(", Expr, ")";
+CastExpr = DeclType, "(", Expr, ")";
 Literal = DecimalInteger | DecimalFloat | StringLiteral
         | BooleanLiteral | NullLiteral;
 ```
 
-上述文法包含全部已确定的运算符优先级。`.as` 和 `.*` 的写法表示后缀结构，不决定词法器必须输出一个还是多个 token。`CastExpr` 作为 `Primary` 参与后缀链；当其类型部分仅为 `TypeName` 时，由名字解析区分类型转换与普通函数调用。`ClassInitExpr`、`SuperCallExpr` 和 `SuperInitExpr` 见第 11 章。
+上述文法包含全部已确定的运算符优先级。`.as` 和 `.*` 的写法表示后缀结构，不决定词法器必须输出一个还是多个 token。`CastExpr` 作为 `Primary` 参与后缀链；当其类型部分仅为 `TypeName` 或 `ClassName` 时，由名字解析区分转换与普通函数调用。`ClassInitExpr`、`SuperCallExpr` 和 `SuperInitExpr` 见第 11 章。
 
 == 运算与转换约束
 
-基础类型提供固定内建运算和数值转换。位运算符包括按位与 `&`、按位或 `|`、按位异或 `^`、一元按位取反 `~`、左移 `<<` 和右移 `>>`。自定义运算通过普通函数表达，不提供自定义运算符机制。已定型的数值类型之间不隐式转换，必须显式写出转换；未定型数值字面量按第 3 章规则定型。除结构完全相同的对象类型及第 4 章的联合构造外，类型之间不进行一般隐式转换；子类值到父类值也必须显式转换。
+基础类型提供固定内建运算和数值转换。位运算符包括按位与 `&`、按位或 `|`、按位异或 `^`、一元按位取反 `~`、左移 `<<` 和右移 `>>`。自定义运算通过普通函数表达，不提供自定义运算符机制。已定型的数值类型之间不隐式转换，必须显式写出转换；未定型数值字面量按第 3 章规则定型。除结构完全相同的 `typedef` 结构对象类型及第 4 章的联合构造外，类型之间不进行一般隐式转换；子类对象到父类对象也必须显式转换。
 
 === 显式类型转换
 
-显式转换采用类型前缀函数式语法 `TypeExpr(expr)`，对应核心文法的 `CastExpr = TypeExpr, "(", Expr, ")"`。由于指针解引用是后缀 `.*`，`*T(expr)` 的指针目标类型写法没有前缀解引用歧义。转换结果是右值，只允许以下范围：
+显式转换采用前缀函数式语法 `DeclType(expr)`，对应核心文法的 `CastExpr = DeclType, "(", Expr, ")"`。由于指针解引用是后缀 `.*`，`*T(expr)` 的指针目标类型写法没有前缀解引用歧义。转换结果是右值，只允许以下范围：
 
 - *数值转换：*任意内建整数类型与浮点类型之间，例如 `i64(x)`、`f32(y)`。
 - *指针转换：*任意指针类型之间，或指针与整数地址之间，例如 `*i32(ptr)`、`*Parent(&child)`。指针转换不复制指向的数据，也不延长其寿命。
-- *类继承向父转换：*子类值 `Child` 可显式转换为父类值 `Parent`，写作 `Parent(child)`。转换按值直接截取复制 `child` 头部的 `Parent` 内存前缀，即前 `sizeof(Parent)` 字节；这里 `sizeof` 仅用于规范描述尺寸。对应指针转换 `*Parent(&child)` 零成本复用原地址。
+- *类继承向父转换：*子类 `Child` 的对象可显式转换为父类 `Parent` 的对象，写作 `Parent(child)`；这是 `ClassName` 作转换目标的唯一情形。转换按值直接截取复制 `child` 头部的 `Parent` 内存前缀，即前 `sizeof(Parent)` 字节；这里 `sizeof` 仅用于规范描述尺寸。对应指针转换 `*Parent(&child)` 零成本复用原地址。
 
 ```cy
 i64 wide = i64(small);
@@ -507,7 +515,7 @@ IfStmt = "if", "(", Expr, ")", Statement,
 WhileStmt = "while", "(", Expr, ")", Statement;
 ForStmt = "for", "(", [ ForInit ], ";", [ Expr ], ";",
           [ Expr ], ")", Statement;
-ForInit = TypeExpr, Identifier, "=", Expr | Expr;
+ForInit = DeclType, Identifier, "=", Expr | Expr;
 NamedStmt = Identifier, ":", (Block | IfStmt | WhileStmt | ForStmt);
 BreakStmt = "break", [ Identifier ], ";";
 ContinueStmt = "continue", [ Identifier ], ";";
@@ -637,8 +645,8 @@ func double_value(i32 value) -> i32 {
 FunctionDecl = "func", Identifier, "(", [ Parameters ], ")",
                "->", ReturnType, Block;
 Parameters = Parameter, { ",", Parameter };
-Parameter = TypeExpr, Identifier, [ "=", ConstExpr ];
-ReturnType = TypeExpr | "void";
+Parameter = DeclType, Identifier, [ "=", ConstExpr ];
+ReturnType = DeclType | "void";
 ReturnStmt = "return", [ Expr ], ";";
 ```
 
@@ -647,7 +655,7 @@ ReturnStmt = "return", [ Expr ], ";";
 支持函数指针：可存入变量、传参和返回。函数指针类型采用 `*func` 前缀语法，只列参数类型，不写参数名。
 
 ```ebnf
-FunctionPointerType = "*", "func", "(", [ TypeExpr, { ",", TypeExpr } ],
+FunctionPointerType = "*", "func", "(", [ DeclType, { ",", DeclType } ],
                       ")", "->", ReturnType;
 ```
 
@@ -686,23 +694,23 @@ func incomplete(bool ready) -> i32 {
 
 == 对象与声明
 
-`class` 对象模型采用类与继承，不采用原型。类是类型，类对象是该类型的值；`typedef` 结构对象不是 `class`，其结构兼容、规范化布局与字面量构造遵守第 3 章。类型声明不自动派生初始化动作，对象必须按本章规则显式构造。
+`class` 对象模型采用类与继承，不采用原型。类与类型是不同的概念：类不属于类型系统，类名是 `ClassName` 而不是 `TypeName`，类对象是类的值；类的字段用类型声明，类型表达式中则只有指针的被指对象和函数指针签名可以写类名（见第 3 章）。`typedef` 结构对象不是 `class`，其结构兼容、规范化布局与字面量构造遵守第 3 章。类声明不自动派生初始化动作，类对象必须按本章规则显式构造。
 
 不自动提供对象内容相等运算；需要比较时逐字段或调用普通函数。字段和方法全部公开，不提供 `private` 等访问控制修饰符。
 
 ```ebnf
-ClassDecl = "class", Identifier, [ "extends", TypeName ],
+ClassDecl = "class", Identifier, [ "extends", ClassName ],
             "{", { ClassMember }, "}";
 ClassMember = FieldDecl | MethodDecl | InitDecl;
 FieldDecl = TypeExpr, Identifier, ";";
 MethodDecl = FunctionDecl;
 InitDecl = "func", "init", "(", [ Parameters ], ")",
            "->", Identifier, Block;
-ImplDecl = "impl", TypeName, ".", Identifier,
+ImplDecl = "impl", ClassName, ".", Identifier,
            "(", [ Parameters ], ")", "->", ReturnType, Block;
 ```
 
-`InitDecl` 的返回类型标识符必须是当前类名。字段声明与局部变量声明分开，字段分号不表示允许局部变量省略初始化。
+`InitDecl` 的返回类型标识符必须是当前类名。字段用 `TypeExpr` 声明，因此字段不能是类对象，需要时使用指向类的指针。字段声明与局部变量声明分开，字段分号不表示允许局部变量省略初始化。
 
 == `class` 分层规范化内存布局
 
@@ -736,11 +744,11 @@ class User extends Entity {
 
 == 全模块绑定与方法归属
 
-同一模块内的 `class`、继承关系和外部 `impl` 按全模块收集后再绑定与类型检查，与声明先后顺序无关。方法可以直接在类内定义，也可通过对应类型定义模块内的外部 `impl` 定义；不能跨文件为外部类型追加方法。
+同一模块内的 `class`、继承关系和外部 `impl` 按全模块收集后再绑定与类型检查，与声明先后顺序无关。方法可以直接在类内定义，也可通过该类定义所在模块内的外部 `impl` 定义；不能跨文件为其他模块的类追加方法。
 
 唯一生效的覆盖优先级是：子类 `class` 内定义优先于父类实现，父类实现包括父类类内方法与父类外部 `impl`。同级重复实现、通过子类外部 `impl` 替换继承方法，或替换本类已有实现，均报编译期错误。书写顺序不构成覆盖优先级。
 
-不支持同名方法参数重载，也不支持按多个参数类型选择的多方法；不同类型可各自拥有同名方法。接收者显式写为首参数 `Circle self`，`circle.area()` 对应按值传入接收者的调用；需要修改外部对象时仍通过显式指针表达。
+不支持同名方法参数重载，也不支持按多个参数类型选择的多方法；不同的类可各自拥有同名方法。接收者显式写为首参数 `Circle self`，`circle.area()` 对应按值传入接收者的调用；需要修改外部对象时仍通过显式指针表达。
 
 ```cy
 class Circle {
@@ -754,7 +762,7 @@ impl Circle.area(Circle self) -> f64 {
 
 == 继承分派、`super` 与机器码复用
 
-继承和方法重写一律静态分派。编译器只根据接收者表达式的静态类型确定目标函数，不维护 vtable。接收者静态类型为父类时绑定父类实现，静态类型为子类时按子类可用实现绑定；具体数据的来源不触发动态分派。需要运行期多态时使用联合类型或显式函数指针。子类值到父类值仍必须使用第 7 章的显式转换。
+继承和方法重写一律静态分派。编译器只根据接收者表达式在编译期确定的类来确定目标函数，不维护 vtable。接收者是父类对象时绑定父类实现，是子类对象时按子类可用实现绑定；具体数据的来源不触发动态分派。需要运行期多态时使用由类指针构成的联合类型（如 `*Circle | *Rect`）或显式函数指针。子类对象到父类对象仍必须使用第 7 章的显式转换。
 
 父类的方法无论定义于 `class` 内还是同模块外部 `impl`，全局仅编译生成一份机器码；子类未重写该方法时直接复用父类函数实现。子类在自身方法内部可通过 `super.method(...)` 显式调用直接父类的对应方法实现。`super` 仅用于子类内部指向直接父类。
 
@@ -773,7 +781,7 @@ SuperCallExpr = "super", ".", Identifier, "(", [ Arguments ], ")";
 `init` 是类内定义的关联初始化函数，签名为 `func init(Parameters) -> ClassName`，返回当前类对象值，不支持同名重载。参数可使用编译期常量默认值 `TypeExpr name = ConstExpr`；普通函数和普通方法不使用默认参数。外部通过 `ClassName.init(...)` 调用以获取对象值。
 
 ```ebnf
-ClassInitExpr = TypeName, ".", "init", "(", [ Arguments ], ")";
+ClassInitExpr = ClassName, ".", "init", "(", [ Arguments ], ")";
 ```
 
 `{ ... }` 直接构造类实例具有词法作用域限制：`class` 外部禁止使用这种形式构造类实例；仅允许在该类自身的方法（含同模块外部 `impl`）与 `init` 内部使用 `{ ... }` 组装并返回当前类实例。此限制不影响第 3 章的 `typedef` 结构对象字面量。
@@ -808,6 +816,8 @@ ClassInitExpr = TypeName, ".", "init", "(", [ Arguments ], ")";
 TryStmt = "try", Block, "catch", "(", TypeExpr, Identifier, ")", Block;
 ThrowStmt = "throw", Expr, ";";
 ```
+
+异常值属于类型系统：`throw` 表达式的静态类型与 `catch` 的接收类型都是 `TypeExpr`，类对象不能抛出或接收；需要携带类对象时抛出指向它的指针，例如 `*Node`。
 
 异常值中如有指针或字符串视图，按值复制不会复制其所指内容，也不会延长其寿命。异常值引用的数据寿命及 `try` 内动态资源的异常路径回收责任，必须由外层 Arena 或调用方显式承担。这不禁止正常路径在 `try` 内主动释放资源；退出作用域或异常展开本身不自动释放资源。
 
@@ -889,14 +899,14 @@ arena_deinit(&arena);
   table.header([*审阅编号*], [*触发条件与依据*]),
   [D01], [实际 NUL 字节；代码中的非 ASCII 符号（开头 BOM 除外）；代码空白中的单独 CR。§2。],
   [D02], [普通字符串直接换行、反斜杠续行、未知转义或缺少结束引号；将保留字用作普通标识符。§2。],
-  [D03], [同作用域类型、变量或函数重名，包括重声明内建基础类型名；引用尚未定义的变量。§2、§3。],
+  [D03], [同作用域类型、变量或函数重名，包括重声明内建基础类型名；引用尚未定义的变量；类名出现在指针被指对象和函数指针签名之外的类型表达式位置，如联合成员、数组元素、`typedef` 右侧或字段类型。§2、§3、§11。],
   [D04], [局部变量缺少显式类型或初始化；采用 var 声明。§3。],
   [D05], [定长数组长度不是编译期正整数常量；枚举元素个数或重复填充 N 与目标长度不符。§3、§5。],
   [D06], [联合读取目标不被联合允许；直接访问联合对象共同字段；typeof 参数不是变量，或把类型系统标识符作为变量存储、传递。§4。],
   [D07], [定长数组或字符串的编译期常量下标越界。§5、§6。],
   [D08], [要求数组隐式退化成指针；通过字符串写入字节。§5、§6。],
   [D09], [字符串拼接／排序运算、隐式字符串转换、相邻字面量拼接。§6。],
-  [D10], [不被允许的隐式转换，包括已定型数值转换和子类值到父类值；联合构造不在此项内。§3、§4、§7。],
+  [D10], [不被允许的隐式转换，包括已定型数值转换和子类对象到父类对象；联合构造不在此项内。§3、§4、§7。],
   [D11], [字面量超出目标类型范围；赋值目标不是允许的可写存储位置；ConstExpr 含有被禁止的运算或读取；整数 / 或 % 的右操作数为编译期常量 0。§3、§7。],
   [D12], [分支或循环条件不是 bool；变量声明直接作为分支／循环主体。§8。],
   [D13], [标签未附着于允许的结构；嵌套结构标签重名。§8。],
@@ -906,11 +916,11 @@ arena_deinit(&arena);
   [D17], [普通局部／匿名函数、闭包、同名函数重载或省略函数类型；可执行程序 main 签名不符。§9、§10。],
   [D18], [void 函数返回值；有返回值的函数缺少值、值类型不符，或可正常落到末尾。§10。],
   [D19], [跨模块外部 impl；同级重复实现；子类外部 impl 替换继承方法，或外部 impl 替换本类已有实现。§11。],
-  [D20], [同类型同名方法重载；子类删除继承成员；在子类定义之外调整继承字段，或把继承字段收窄为不相交类型。§11。],
+  [D20], [同一类的同名方法重载；子类删除继承成员；在子类定义之外调整继承字段，或把继承字段收窄为不相交类型。§11。],
   [D21], [递归下降解析超过配置的语法嵌套深度上限。§13。],
   [D22], [在 class 外部使用对象字面量构造类实例；typedef 字面量字段不匹配；类直接构造遗漏字段，或 super.init 遗漏新增／收窄字段。§3、§11。],
   [D23], [直接 print 数组、联合、结构对象、class 对象等不支持的复合类型。§8。],
-  [D24], [throw 表达式或 catch 类型的静态尺寸超过目标平台固定异常槽容量。§12。],
+  [D24], [throw 表达式或 catch 类型的静态尺寸超过目标平台固定异常槽容量；抛出或接收类对象。§12。],
   [D25], [显式转换超出数值、指针或子类到父类的允许范围；super 用于非子类内部，或 super.init 未委托直接父类。§7、§11。],
   [D26], [init 返回类型不是当前类或存在同名重载；非 init 参数使用默认值，或默认值不是 ConstExpr。§10、§11。],
 )
