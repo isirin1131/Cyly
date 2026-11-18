@@ -2,7 +2,6 @@
 
 BUILD_DIR ?= build
 BUILD_TYPE ?= debug
-FILE ?= examples/hello.cy
 TYPST ?= typst
 TYPST_FLAGS ?=
 SPEC_PDF := output/pdf/cyly-language-spec.pdf
@@ -29,8 +28,9 @@ docs: ## 用 Typst 渲染语言规范 PDF（需要中文字体）
 	mkdir -p output/pdf
 	$(TYPST) compile $(TYPST_FLAGS) docs/language-spec.typ $(SPEC_PDF)
 
-run: build ## 运行 cyly（可指定文件：make run FILE=xxx.cy）
-	./$(BUILD_DIR)/cyly $(FILE)
+run: build ## 运行 cyly（make run FILE=path/to/source.cy）
+	@test -n "$(FILE)" || { echo "Usage: make run FILE=path/to/source.cy" >&2; exit 2; }
+	./$(BUILD_DIR)/cyly "$(FILE)"
 
 reconfigure: ## 修改 meson.build 后若出问题，强制重新配置
 	meson setup --reconfigure $(BUILD_DIR) --buildtype=$(BUILD_TYPE)
