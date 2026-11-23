@@ -23,4 +23,4 @@ Cyly 更在意程序实际做了什么，而不是语法表面隐藏了多少细
 
 [语言规范草案](docs/language-spec.typ) 是语言语义、语法和运行时规则的权威记录。早期的 [设计决策](old/DESIGN_DECISIONS.md) 已归档，仅供追溯；与规范不一致时以规范为准。
 
-规范沿用设计决策的章节顺序，展开 EBNF、静态约束、运行语义、诊断与示例，并区分已定规则、候选补充和实现约定。使用 Typst 运行 `make docs` 可生成 [PDF](output/pdf/cyly-language-spec.pdf)；需要可用的中文字体，详见规范末尾的构建说明。
+规范按源文本、类型与值、表达式、程序组织和实现约束展开，包含文法片段、语义规则、示例及诊断索引。使用 Typst 运行 `make docs` 可生成 [PDF](output/pdf/cyly-language-spec.pdf)；字体配置、构建方法及维护事项见 [文档说明](docs/README.md)。
