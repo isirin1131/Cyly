@@ -1,5 +1,7 @@
 // Build from the repository root: make docs
 // No external Typst packages or network access are required.
+#import "grammar.typ": grammar-catalog, grammar-panel
+#let grammars = grammar-catalog(read("language-spec.typ"))
 #let ink = rgb("202c38")
 #let accent = rgb("176c70")
 #let muted = rgb("65727d")
@@ -8,7 +10,7 @@
 #let cjk-sans = sys.inputs.at("cjk-sans", default: "PingFang SC")
 #let latin-sans = sys.inputs.at("latin-sans", default: "Avenir Next")
 #let mono = sys.inputs.at("mono", default: "Menlo")
-#set document(title: "Cyly 语言规范草案", author: "Cyly", description: "Cyly 语言规范草案 0.5", date: datetime(year: 2026, month: 11, day: 24))
+#set document(title: "Cyly 语言规范草案", author: "Cyly", description: "Cyly 语言规范草案 0.5", date: datetime(year: 2026, month: 11, day: 26))
 #set page(paper: "a4", margin: (top: 22mm, bottom: 21mm, x: 22mm), numbering: "1",
   header: context {
     if counter(page).get().first() > 1 {
@@ -21,7 +23,7 @@
   footer: context {
     if counter(page).get().first() > 1 {
       set text(size: 8pt, fill: muted)
-      grid(columns: (1fr, auto), [Cyly 语言规范 · 2026-11-24], counter(page).display("1"))
+      grid(columns: (1fr, auto), [Cyly 语言规范 · 2026-11-26], counter(page).display("1"))
     }
   })
 #set text(font: ("Libertinus Serif", cjk-serif), size: 10.5pt, lang: "zh", fill: ink)
@@ -38,6 +40,7 @@
 #show outline.entry.where(level: 1): set text(weight: "bold")
 #show raw: set text(font: (mono, cjk-sans), size: 8.5pt)
 #show raw.where(block: true): it => block(width: 100%, fill: pale, inset: 10pt, radius: 3pt, breakable: false, it)
+#show raw.where(block: true, lang: "ebnf"): it => grammar-panel(it, grammars, mono, cjk-sans, accent, pale)
 #show link: set text(fill: accent)
 #show ref: it => {
   let el = it.element
@@ -75,7 +78,7 @@
 #v(1fr)
 #text(size: 9pt, fill: muted)[
   草案 0.5\
-  2026 年 11 月 24 日
+  2026 年 11 月 26 日
 ]
 #pagebreak()
 
@@ -85,7 +88,11 @@
 
 “由实现规定”表示具体实现须选择并在实现文档中记录的事项，其选择必须符合本规范的其他约束。“未定义行为”表示本规范对相应执行不作要求。LLVM `poison` 及未定义行为适用于正文明确列出的运算边界。
 
-语法采用 EBNF：`=` 定义产生式，`|` 表示选择，`[ ... ]` 表示可选项，`{ ... }` 表示零次或多次重复，双引号或单引号包围终结符。引号内的 `"|"`、`"["` 等才是源代码字符。产生式末尾的分号属于 EBNF；源代码分号写成 `";"`。`EOF` 表示输入结束。
+语法采用 EBNF：`=` 定义产生式，`,` 表示依次连接，`|` 表示选择，`[ ... ]` 表示可选项，`{ ... }` 表示零次或多次重复，`( ... )` 表示分组。连接 `,` 的优先级高于选择 `|`：`A, B | C, D` 表示 `(A, B) | (C, D)`。
+
+双引号或单引号包围终结符，引号内的字符按原样匹配，不执行字符串转义。例如 EBNF 中的 `"\n"` 匹配源码中的反斜杠与字母 `n`，不是实际换行；`'"'` 匹配一个双引号。引号内的 `"|"`、`"["` 等才是源代码字符。产生式末尾的分号属于 EBNF；源代码分号写成 `";"`。`? ... ?` 表示由文字描述的词法字节或位置条件；`(* ... *)` 是文法说明，不属于 Cyly 源码。`EOF` 表示输入结束。
+
+每条产生式附中文含义。文法块右侧的“递归依赖速查”列出本块引用的其他产生式及其全部间接依赖，附中文含义与完整定义，名称链接到原定义；本块内的定义就地查阅。同一依赖只列一次，递归引用不无限展开。文法按依赖顺序排列，相互递归的产生式成组共同定义，并先列出本组名称说明；跨组引用只指向前文定义。速查栏用于查阅文法，程序是否合法仍须结合对应正文的语义约束。
 
 文法片段与文字规则共同描述语言；各章列出的产生式不构成脱离正文的独立文法。合法程序除符合语法外，还须通过名字解析、类型检查并满足运行期有效性约束。
 
@@ -112,8 +119,6 @@ Cyly 是静态类型、原生编译的语言，采用值语义、显式内存管
 
 == 语言范围 <sec-scope>
 
-本规范不包含参数化多态（泛型）、宏或用于容器复用的代码生成机制；不包含 `readonly` 修饰、可选字段、交叉类型、宽度子类型、控制流类型收窄或联合穷尽检查；也不包含类型位置的 `typeof`、成员键查询、索引访问类型、条件类型、映射类型或模板字面量类型等类型级运算。
-
 连续内存视图（切片）、动态数组、字典和哈希表不作为语言内建类型，均由库通过具体类型及普通函数实现。
 
 = 源文本与词法 <ch-lex>
@@ -129,19 +134,33 @@ Cyly 是静态类型、原生编译的语言，采用值语义、显式内存管
 标识符区分大小写，其形式为 `[a-zA-Z_][a-zA-Z_0-9]*`。类型、类、变量、函数和语句标签均使用此形式；某个单词能否用作声明名还受保留字规则约束。
 
 ```ebnf
-Identifier = LetterOrUnderscore, { LetterOrUnderscore | Digit };
+(* 标识符中的字母或下划线 *)
+LetterOrUnderscore = ? ASCII 大小写字母或下划线 ?;
+(* 一个十进制数字 *)
 Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+(* 标识符；仍受保留字与名字解析规则约束 *)
+Identifier = LetterOrUnderscore, { LetterOrUnderscore | Digit };
+(* 一个十六进制数字 *)
 HexDigit = Digit | "a" | "b" | "c" | "d" | "e" | "f"
                  | "A" | "B" | "C" | "D" | "E" | "F";
+(* 一个二进制数字 *)
 BinaryDigit = "0" | "1";
+(* 无进制前缀的十进制整数字面量 *)
 DecimalInteger = Digit, { Digit };
+(* 以 0x 或 0X 开头的十六进制整数字面量 *)
 HexInteger = ("0x" | "0X"), HexDigit, { HexDigit };
+(* 以 0b 或 0B 开头的二进制整数字面量 *)
 BinaryInteger = ("0b" | "0B"), BinaryDigit, { BinaryDigit };
+(* 任一进制的整数字面量，不含前置负号 *)
 IntegerLiteral = DecimalInteger | HexInteger | BinaryInteger;
+(* 以 e 或 E 开头的十进制指数部分 *)
 Exponent = ("e" | "E"), [ "+" | "-" ], DecimalInteger;
-DecimalFloat = DecimalInteger, ".", DecimalInteger, [ Exponent ]
-             | DecimalInteger, Exponent;
+(* 带小数点或指数的十进制浮点字面量 *)
+DecimalFloat = (DecimalInteger, ".", DecimalInteger, [ Exponent ])
+             | (DecimalInteger, Exponent);
+(* 布尔字面量 true 或 false *)
 BooleanLiteral = "true" | "false";
+(* 空值字面量 null *)
 NullLiteral = "null";
 ```
 
@@ -183,24 +202,30 @@ u8 wrapped = 0x1FF.to(u8); // 显式转换保留低 8 位，结果为 255
 普通字符串字面量由一对双引号包围：
 
 ```ebnf
-StringLiteral = '"', { StringByte | EscapeSeq }, '"';
+(* 字符串中无需转义的一个原始字节 *)
+StringByte = ? 除双引号、反斜杠、CR、LF、NUL 外的原始字节 ?;
+(* 字符串转义序列；解码结果见正文 *)
 EscapeSeq = "\n" | "\r" | "\t" | "\0" | "\\" | '\"';
+(* 双引号包围的普通字符串字面量 *)
+StringLiteral = '"', { StringByte | EscapeSeq }, '"';
 ```
 
 其中 `StringByte` 表示除双引号 `"`、反斜杠 `\`、直接换行（LF、CRLF 或单独 CR）和实际 NUL 字节之外的原始字节，按原值保留。允许的转义序列及其解码字节如下；未知转义、缺失结束引号、直接换行和反斜杠续行均为编译错误。
 
 #matrix(
   table.header([*源代码转义*], [*解码后的字节*]),
-  [`\n`], [`0A`，换行],
-  [`\r`], [`0D`，回车],
-  [`\t`], [`09`，水平制表符],
-  [`\0`], [`00`，NUL],
-  [`\\`], [`5C`，反斜杠],
-  [`\"`], [`22`，双引号],
+  [`\n`], [`0x0A`，换行],
+  [`\r`], [`0x0D`，回车],
+  [`\t`], [`0x09`，水平制表符],
+  [`\0`], [`0x00`，NUL],
+  [`\\`], [`0x5C`，反斜杠],
+  [`\"`], [`0x22`，双引号],
 )
 
 ```cy
 string message = "A\0B";  // 合法：解码后有三个字节
+string newline = "\n";    // 解码后：一个换行字节（0x0A）
+string slash_n = "\\n";  // 解码后：反斜杠和字母 n（0x5C、0x6E）
 string bad = "\q";        // 错误：未知转义
 ```
 
@@ -211,9 +236,23 @@ string bad = "\q";        // 错误：未知转义
 代码空白为 ASCII 空格、水平制表符以及 @sec-source-bytes 规定的 LF 或 CRLF 换行。行注释以 `//` 开始，持续到下一个合法换行或文件结束；文件末尾的行注释不要求以换行结束。块注释使用 `/* ... */`，可以跨行并允许嵌套。
 
 ```ebnf
-Whitespace = " " | HT | Newline;
+(* 水平制表符 *)
+HT = ? 水平制表符字节 0x09 ?;
+(* 单字节换行 *)
+LF = ? 换行字节 0x0A ?;
+(* 回车与换行组成的双字节换行 *)
+CRLF = ? 连续的回车、换行字节 0x0D、0x0A ?;
+(* 行注释中的一个普通字节 *)
+LineCommentByte = ? 非合法换行起始位置且非 NUL 的字节 ?;
+(* 块注释中的一个普通字节 *)
+BlockCommentByte = ? 非 /* 或 */ 起始位置且非 NUL 的字节 ?;
+(* 一种合法的源码换行 *)
 Newline = LF | CRLF;
+(* 一个代码空白单元 *)
+Whitespace = " " | HT | Newline;
+(* 双斜杠开始的行注释，不含结束换行 *)
 LineComment = "//", { LineCommentByte };
+(* 可嵌套的块注释 *)
 BlockComment = "/*", { BlockComment | BlockCommentByte }, "*/";
 ```
 
@@ -232,29 +271,240 @@ i32 count /* 个数 */ = 1;
 string markers = "// /* */"; // 字符串内容原样保留
 ```
 
+用块注释停用代码时，其中原本位于字符串内的注释标记也会参与嵌套计数。例如以下内容到达文件结束时仍缺少一层结束标记，因为引号中的 `/*` 又开启了一层块注释：
+
+```cy
+/* print "/*"; */
+```
+
+= 语法结构 <ch-grammar>
+
+本章按文法依赖顺序集中定义语法结构：先说明名称与字面量，再组合表达式、声明、语句和完整源文件。相互递归的产生式在同一组内共同定义；各组只依赖本组或前文已经定义的文法。类型身份、值域、转换和布局规则在后续章节展开。
+
+== 名称与字面量 <sec-grammar-atoms>
+
+以下名称建立在第二章的标识符与字面量文法之上。它们描述语法中使用的名字和字面量形式。
+
+```ebnf
+(* 类型名字的语法位置 *)
+TypeName = Identifier;
+(* 类名字的语法位置 *)
+ClassName = Identifier;
+(* 出现在类型位置的字面量写法 *)
+LiteralType = [ "-" ], IntegerLiteral
+            | StringLiteral
+            | BooleanLiteral
+            | NullLiteral;
+(* 整数、浮点、字符串、布尔或空值字面量 *)
+Literal = IntegerLiteral | DecimalFloat | StringLiteral
+        | BooleanLiteral | NullLiteral;
+```
+
+== 表达式与类型写法 <sec-grammar-expressions>
+
+本组产生式共同定义表达式和类型的书写形式。数组类型的长度使用表达式，表达式中的转换又使用类型写法，因此两者相互递归；本组名称先统一说明，再列出完整定义。
+
+```ebnf
+(* 由类型项和联合符号组成的类型写法 *)
+TypeExpr = PrefixType, { "|", PrefixType };
+(* 可带指针或数组前缀的类型写法 *)
+PrefixType = "*", PointeeType
+           | "[", ConstExpr, "]", PrefixType
+           | TypeAtom;
+(* 星号指针前缀后的类型写法或类名 *)
+PointeeType = PrefixType | ClassName;
+(* 不带外层指针或数组前缀的类型项，含括号分组 *)
+TypeAtom = TypeName | LiteralType | "(", TypeExpr, ")"
+         | ObjectType | FunctionPointerType;
+(* 变量或参数等声明位置的类型写法或类名 *)
+DeclType = TypeExpr | ClassName;
+(* 返回值的声明类型，或无返回值标记 void *)
+ReturnType = DeclType | "void";
+(* 列出参数类型与返回类型的函数指针类型 *)
+FunctionPointerType = "*", "func", "(", [ DeclType, { ",", DeclType } ],
+                      ")", "->", ReturnType;
+(* 以字段名和字段类型描述的结构写法 *)
+ObjectType = "{", ObjectField, { ",", ObjectField }, [ "," ], "}";
+(* 结构对象中的一个字段名与字段类型 *)
+ObjectField = Identifier, ":", TypeExpr;
+(* 一般表达式入口 *)
+Expr = Assignment;
+(* 常量表达式的语法入口，与一般表达式同形 *)
+ConstExpr = Expr;
+(* 赋值层表达式，赋值运算向右结合 *)
+Assignment = LogicalOr, [ "=", Assignment ];
+(* 逻辑或层表达式 *)
+LogicalOr = LogicalAnd, { "or", LogicalAnd };
+(* 逻辑与层表达式 *)
+LogicalAnd = BitwiseOr, { "and", BitwiseOr };
+(* 按位或层表达式 *)
+BitwiseOr = BitwiseXor, { "|", BitwiseXor };
+(* 按位异或层表达式 *)
+BitwiseXor = BitwiseAnd, { "^", BitwiseAnd };
+(* 按位与层表达式 *)
+BitwiseAnd = Equality, { "&", Equality };
+(* 相等比较层表达式，含 typeof 成员测试 *)
+Equality = Relational, { ("==" | "!="), Relational }
+         | TypeofTest;
+(* typeof 结果的相等或不等测试 *)
+TypeofTest = TypeofExpr, ("==" | "!="), (PrefixType | TypeofExpr);
+(* typeof 查询形式；操作数与使用位置受正文限制 *)
+TypeofExpr = "typeof", "(", Expr, ")";
+(* 大小比较层表达式 *)
+Relational = Shift, { ("<" | "<=" | ">" | ">="), Shift };
+(* 整数移位层表达式 *)
+Shift = Additive, { ("<<" | ">>"), Additive };
+(* 加减运算层表达式 *)
+Additive = Multiplicative, { ("+" | "-"), Multiplicative };
+(* 乘除与取模层表达式 *)
+Multiplicative = Unary, { ("*" | "/" | "%"), Unary };
+(* 一元运算层表达式 *)
+Unary = ("not" | "~" | "+" | "-" | "&"), Unary | Postfix;
+(* 基本表达式后连续附加后缀的表达式 *)
+Postfix = Primary, { Suffix };
+(* 字段、解引用、类型读取、转换、下标或调用后缀 *)
+Suffix = ".", Identifier | ".*"
+       | ".as", "(", TypeExpr, ")"
+       | ".to", "(", DeclType, ")"
+       | "[", Expr, "]" | "(", [ Arguments ], ")";
+(* 调用时的非空实参列表 *)
+Arguments = Expr, { ",", Expr };
+(* 标识符、字面量、构造或括号分组等基本表达式 *)
+Primary = Identifier | Literal | ArrayLiteral | ObjectLiteral
+        | ClassInitExpr | SuperCallExpr | SuperInitExpr
+        | "(", Expr, ")";
+(* 定长数组字面量，可枚举或重复填充 *)
+ArrayLiteral = "[", Expr, { ",", Expr }, "]"
+             | "[", Expr, ";", ConstExpr, "]";
+(* 花括号包围的对象字段初始化列表 *)
+ObjectLiteral = "{", [ FieldInit, { ",", FieldInit }, [ "," ] ], "}";
+(* 对象字面量中的一个字段初始化项 *)
+FieldInit = Identifier, ":", Expr;
+(* 通过类名显式调用 init 的表达式 *)
+ClassInitExpr = ClassName, ".", "init", "(", [ Arguments ], ")";
+(* 调用直接父类普通方法的表达式 *)
+SuperCallExpr = "super", ".", Identifier, "(", [ Arguments ], ")";
+(* 委托父类 init 并初始化子类字段的表达式 *)
+SuperInitExpr = "super", ".", "init", "(", [ Arguments ], ")", "{",
+                [ FieldInit, { ",", FieldInit }, [ "," ] ], "}";
+```
+
+== 简单声明与语句 <sec-grammar-simple-statements>
+
+本节在已定义的表达式与类型写法上，定义声明、跳转、打印、返回、抛出及表达式语句；这些形式均不包含语句主体。
+
+```ebnf
+(* typedef 类型别名声明 *)
+TypeDecl = "typedef", Identifier, "=", TypeExpr, ";";
+(* 带显式类型与初值的变量声明 *)
+VariableDecl = DeclType, Identifier, "=", Expr, ";";
+(* for 头部的初始化部分，不含分隔分号 *)
+ForInit = DeclType, Identifier, "=", Expr | Expr;
+(* 退出循环或具名结构的 break 语句 *)
+BreakStmt = "break", [ Identifier ], ";";
+(* 继续循环的 continue 语句 *)
+ContinueStmt = "continue", [ Identifier ], ";";
+(* 打印一个值的 print 语句 *)
+PrintStmt = "print", Expr, ";";
+(* 返回语句，可带返回表达式 *)
+ReturnStmt = "return", [ Expr ], ";";
+(* 抛出异常值的 throw 语句 *)
+ThrowStmt = "throw", Expr, ";";
+(* 以分号结束的表达式语句 *)
+ExprStmt = Expr, ";";
+```
+
+== 代码块与复合语句 <sec-grammar-blocks>
+
+代码块可以包含语句，分支、循环与异常处理又包含语句或代码块，因此以下产生式作为一组共同定义。
+
+```ebnf
+(* 花括号包围的代码块 *)
+Block = "{", { BlockItem }, "}";
+(* 块内的一项：局部声明或语句 *)
+BlockItem = TypeDecl | VariableDecl | Statement;
+(* 语句入口，不含变量或 typedef 声明 *)
+Statement = Block | IfStmt | WhileStmt | ForStmt | NamedStmt
+          | BreakStmt | ContinueStmt | PrintStmt
+          | ReturnStmt | TryStmt | ThrowStmt | ExprStmt | ";";
+(* if 条件分支语句 *)
+IfStmt = "if", "(", Expr, ")", Statement,
+         [ "else", Statement ];
+(* while 循环语句 *)
+WhileStmt = "while", "(", Expr, ")", Statement;
+(* C 式 for 循环语句 *)
+ForStmt = "for", "(", [ ForInit ], ";", [ Expr ], ";",
+          [ Expr ], ")", Statement;
+(* 带标签的块、条件分支或循环 *)
+NamedStmt = Identifier, ":", (Block | IfStmt | WhileStmt | ForStmt);
+(* 带一个 catch 分支的 try 语句 *)
+TryStmt = "try", Block,
+          "catch", "(", TypeExpr, Identifier, ")", Block;
+```
+
+== 函数与类声明 <sec-grammar-declarations>
+
+函数体和方法体使用前节已经定义的代码块。下面依次定义参数、函数、类成员以及类声明。
+
+```ebnf
+(* 一个形参的类型、名字及可选默认值 *)
+Parameter = DeclType, Identifier, [ "=", ConstExpr ];
+(* 函数签名中的非空形参列表 *)
+Parameters = Parameter, { ",", Parameter };
+(* 具名函数定义；也复用于类内普通方法 *)
+FunctionDecl = "func", Identifier, "(", [ Parameters ], ")",
+               "->", ReturnType, Block;
+(* 类中一个字段的声明 *)
+FieldDecl = TypeExpr, Identifier, ";";
+(* 继承字段的 as 声明形式 *)
+FieldAccessDecl = Identifier, "as", TypeExpr, ";";
+(* 类内普通方法定义 *)
+MethodDecl = FunctionDecl;
+(* 显式初始化函数 init 的定义 *)
+InitDecl = "func", "init", "(", [ Parameters ], ")",
+           "->", Identifier, Block;
+(* 类内的字段、方法、init 或继承字段访问约束 *)
+ClassMember = [ "export" ], (FieldDecl | MethodDecl | InitDecl)
+            | FieldAccessDecl;
+(* 类声明，可指定一个直接父类 *)
+ClassDecl = "class", Identifier, [ "extends", ClassName ],
+            "{", { ClassMember }, "}";
+(* 同模块内的类外方法定义 *)
+ImplDecl = "impl", ClassName, ".", Identifier,
+           "(", [ Parameters ], ")", "->", ReturnType, Block;
+```
+
+== 模块与完整源文件 <sec-grammar-source>
+
+最后组合模块声明、导入和顶层声明，定义一个完整源文件的形式。
+
+```ebnf
+(* 源文件输入结束 *)
+EOF = ? 输入结束位置，不消耗字节 ?;
+(* 以点分隔的模块名字 *)
+ModuleName = Identifier, { ".", Identifier };
+(* 源文件开头的模块声明 *)
+ModuleDecl = "module", ModuleName, ";";
+(* 一个导入名字及其可选别名 *)
+ImportItem = Identifier, [ "as", Identifier ];
+(* 按名字从模块导入声明 *)
+ImportDecl = "import", "{", ImportItem, { ",", ImportItem }, "}",
+             "from", ModuleName, ";";
+(* 可导出的类型、类、函数或变量声明 *)
+ExportableDecl = TypeDecl | ClassDecl | FunctionDecl | VariableDecl;
+(* 模块顶层声明，可附 export *)
+TopLevelDecl = [ "export" ], (ExportableDecl | ImplDecl);
+(* 一个完整的 Cyly 源文件 *)
+SourceFile = ModuleDecl, { ImportDecl | TopLevelDecl }, EOF;
+```
+
 = 类型、声明与值的基础 <ch-types>
 
 == 类型构造与身份 <sec-type-identity>
 
 类型系统支持内建基础类型、字面量类型、`typedef` 结构对象类型、显式指针、函数指针、定长数组和一般联合类型。类型别名声明写作 `typedef Name = TypeExpr;`，声明的名字是透明别名，不创建独立类型身份。`class` 是声明类的唯一关键字，每处类声明具有独立身份，不适用透明别名或结构同一性规则；`typedef` 结构对象与 `class` 对象分别遵守本章和#ref(<ch-classes>)的规则。
 
-```ebnf
-TypeDecl = "typedef", Identifier, "=", TypeExpr, ";";
-TypeExpr = PrefixType, { "|", PrefixType };
-PrefixType = "*", PointeeType
-           | "[", ConstExpr, "]", PrefixType
-           | TypeAtom;
-PointeeType = PrefixType | ClassName;
-TypeAtom = TypeName | LiteralType | "(", TypeExpr, ")"
-         | ObjectType | FunctionPointerType;
-LiteralType = [ "-" ], IntegerLiteral
-            | StringLiteral
-            | BooleanLiteral
-            | NullLiteral;
-TypeName = Identifier;
-ClassName = Identifier;
-DeclType = TypeExpr | ClassName;
-```
+类型名称与类型写法的文法见 @sec-grammar-atoms、@sec-grammar-expressions，`typedef` 声明的文法见 @sec-grammar-simple-statements。
 
 `TypeName` 指解析为内建基础类型或 `typedef` 别名的标识符，`ClassName` 指解析为 `class` 的标识符。结构对象类型文字 `ObjectType` 见 @sec-struct-objects，可直接写在任意 `TypeExpr` 位置，无需先经 `typedef` 命名；函数指针类型 `FunctionPointerType` 见 @sec-func-decl。
 
@@ -321,9 +571,7 @@ print 1.0;            // 无期望类型：默认 f64
 
 == 编译期常量表达式 <sec-constexpr>
 
-```ebnf
-ConstExpr = Expr;
-```
+文法定义：`ConstExpr` 见 @sec-grammar-expressions。
 
 语法上 `ConstExpr` 采用一般表达式 `Expr` 的形式，但仅允许由字面量、模块级变量的编译期初值、内建算术／位／逻辑／比较运算、显式类型转换（@sec-conversions）以及定长数组的 `.len` 构成。数组字面量的所有元素或 `typedef` 结构对象字面量的所有字段初始化式均为 `ConstExpr` 时，整个复合字面量（递归包含嵌套字面量）属于 `ConstExpr`；重复填充 `[val; N]` 的 `val` 和 `N` 均须为 `ConstExpr`，并满足常规类型、字段和长度约束。
 
@@ -335,10 +583,7 @@ ConstExpr = Expr;
 
 `typedef` 结构对象类型在完全展开透明别名并归一化联合类型后，当且仅当字段集合（每个字段的名称与对应静态类型）完全相同时具有同一类型身份，与源码中的字段声明顺序、所在文件或所属模块无关。相同结构类型的对象值可直接互相赋值或传参，不进行宽度子类型转换。
 
-```ebnf
-ObjectType = "{", ObjectField, { ",", ObjectField }, [ "," ], "}";
-ObjectField = Identifier, ":", TypeExpr;
-```
+文法定义：`ObjectType`、`ObjectField` 见 @sec-grammar-expressions。
 
 `typedef` 结构对象类型必须至少包含一个字段，不支持空结构（此限制不适用于 `class`，无字段类见 @sec-class-decl）。字段以逗号分隔，允许末尾逗号；同一结构内字段不得重名。字段类型使用 `TypeExpr`，可包含嵌套结构、联合、定长数组和指针，不能直接包含类对象。
 
@@ -348,10 +593,7 @@ ObjectField = Identifier, ":", TypeExpr;
 
 `typedef` 结构对象使用不带类型名前缀的对象字面量初始化或赋值（`class` 实例的对象字面量构造受 @sec-class-init 限制）：
 
-```ebnf
-ObjectLiteral = "{", [ FieldInit, { ",", FieldInit }, [ "," ] ], "}";
-FieldInit = Identifier, ":", Expr;
-```
+文法定义：`ObjectLiteral`、`FieldInit` 见 @sec-grammar-expressions。
 
 对象字面量的字段集合必须与目标结构类型完全一致，不得遗漏、多出或重复字段；空字面量 `{}` 仅用于 @sec-class-init 规定的无字段类显式构造，不能构造 `typedef` 结构对象。目标字段类型为对应初始化表达式提供期望类型，适用 @sec-literal-typing 的字面量定型与 @sec-union-construct 的联合构造规则。各字段初始化式严格按字面量中的源码书写顺序从左到右求值，不受规范化内存布局影响。
 
@@ -377,9 +619,7 @@ Cyly 区分以下三类独立名字空间：
   - 局部变量的初始化式按声明前已有的可见绑定解析（若存在同名外层声明则引用该外层绑定，若不存在则为编译错误）；求值完成初始化后，新变量绑定在当前块的剩余部分及其内层块中可见。`for` 初始化中声明的变量按相同规则解析初值，并在该 `for` 的条件、步进和主体中可见（@sec-for）。
   - 块内 `typedef` 从声明处起在当前块的剩余部分及其内层块中可见，离开该块即失效；声明前按外层已有绑定解析。局部 `typedef` 仍是纯编译期透明别名，不创建独立类型身份，不产生运行期代码，也不改变所指类型或值的寿命。
 
-```ebnf
-VariableDecl = DeclType, Identifier, "=", Expr, ";";
-```
+文法定义：`VariableDecl` 见 @sec-grammar-simple-statements。
 
 变量采用 C 式显式类型声明，不提供 `var` 关键字，不进行变量类型推断。局部变量和模块级变量均必须在声明处显式给出初始化式；语言不生成默认零值，也不自动调用 `init`。模块级变量的初始化式须为 `ConstExpr`（@sec-module-init）。
 
@@ -432,7 +672,7 @@ func example() -> void {
 
 数据指针、类指针和函数指针均可作为按值存储的联合成员。例如，当 `Handler` 为 `*func(i32) -> i32` 的透明别名时，`*Node | Handler | null` 可存放类指针、匹配签名的函数指针或 `null`，写入指针仅复制地址。类对象与普通函数本身均不能作为联合成员。
 
-控制流不触发类型收窄：经 `typeof` 测试后，原表达式的静态类型仍为原联合类型。展开后字段结构完全相同的两个 `typedef` 结构对象别名具有同一类型身份，不能通过 `typeof` 区分；需区分对象种类时，应使用含不同字面量类型字段的结构（如 `kind: "user"` 与 `kind: "order"`）。
+控制流不触发类型收窄：经 `typeof` 测试后，原表达式的静态类型仍为原联合类型。编译器不检查联合成员分支是否穷尽；按成员类型编写的条件分支不必覆盖全部成员，函数返回仍须满足 @sec-return 的检查规则。展开后字段结构完全相同的两个 `typedef` 结构对象别名具有同一类型身份，不能通过 `typeof` 区分；需区分对象种类时，应使用含不同字面量类型字段的结构（如 `kind: "user"` 与 `kind: "order"`）。
 
 == 当前成员查询 <sec-typeof>
 
@@ -580,10 +820,7 @@ typedef Result = { ok: true, value: i32 } | { ok: false, error: string };
 
 `[N]T` 是包含 `N` 个 `T` 元素的定长数组，采用纯值语义：赋值、按值传参与返回均复制整块数组，数组不会隐式退化为指针。`arr.len` 返回元素个数，静态类型为 `i64`；元素通过 `arr[i]` 读写。
 
-```ebnf
-ArrayLiteral = "[", Expr, { ",", Expr }, "]"
-             | "[", Expr, ";", ConstExpr, "]";
-```
+文法定义：`ArrayLiteral` 见 @sec-grammar-expressions。
 
 枚举形式 `[e1, e2, ...]` 与重复填充形式 `[val; N]` 均为显式数组初始化。枚举元素个数及重复填充的 `N` 必须严格等于目标定长数组的声明长度，不自动补零或截断；每个元素须符合目标元素类型。重复填充中的 `val` 仅求值一次，随后将所得值按值语义复制 `N` 份填入各槽位。`&arr` 的类型为 `*[N]T`；获取首元素指针须显式写作 `&arr[0]`，类型为 `*T`。
 
@@ -665,37 +902,9 @@ string bad = left + right; // 错误：不提供字符串拼接运算符
 
 == 核心表达式文法 <sec-expr-grammar>
 
-```ebnf
-Expr = Assignment;
-Assignment = LogicalOr, [ "=", Assignment ];
-LogicalOr = LogicalAnd, { "or", LogicalAnd };
-LogicalAnd = BitwiseOr, { "and", BitwiseOr };
-BitwiseOr = BitwiseXor, { "|", BitwiseXor };
-BitwiseXor = BitwiseAnd, { "^", BitwiseAnd };
-BitwiseAnd = Equality, { "&", Equality };
-Equality = Relational, { ("==" | "!="), Relational }
-         | TypeofTest;
-TypeofTest = TypeofExpr, ("==" | "!="), (PrefixType | TypeofExpr);
-TypeofExpr = "typeof", "(", Expr, ")";
-Relational = Shift, { ("<" | "<=" | ">" | ">="), Shift };
-Shift = Additive, { ("<<" | ">>"), Additive };
-Additive = Multiplicative, { ("+" | "-"), Multiplicative };
-Multiplicative = Unary, { ("*" | "/" | "%"), Unary };
-Unary = ("not" | "~" | "+" | "-" | "&"), Unary | Postfix;
-Postfix = Primary, { Suffix };
-Suffix = ".", Identifier | ".*"
-       | ".as", "(", TypeExpr, ")"
-       | ".to", "(", DeclType, ")"
-       | "[", Expr, "]" | "(", [ Arguments ], ")";
-Arguments = Expr, { ",", Expr };
-Primary = Identifier | Literal | ArrayLiteral | ObjectLiteral
-        | ClassInitExpr | SuperCallExpr | SuperInitExpr
-        | "(", Expr, ")";
-Literal = IntegerLiteral | DecimalFloat | StringLiteral
-        | BooleanLiteral | NullLiteral;
-```
+表达式文法见 @sec-grammar-expressions，所用字面量见 @sec-grammar-atoms。
 
-上述文法编码了 @sec-eval-order 的优先级与结合性。`.as`、`.to` 和 `.*` 描述后缀语法结构，具体 token 切分方式由词法器实现决定。`.to(...)` 括号内按 `DeclType` 解析目标，合法转换范围见 @sec-conversions；`ClassInitExpr`、`SuperCallExpr` 和 `SuperInitExpr` 见#ref(<ch-classes>)。
+@sec-grammar-expressions 的表达式文法编码了 @sec-eval-order 的优先级与结合性。`.as`、`.to` 和 `.*` 描述后缀语法结构，具体 token 切分方式由词法器实现决定。`.to(...)` 括号内按 `DeclType` 解析目标，合法转换范围见 @sec-conversions；`ClassInitExpr`、`SuperCallExpr` 和 `SuperInitExpr` 见#ref(<ch-classes>)。
 
 == 运算与转换约束 <sec-ops>
 
@@ -838,26 +1047,9 @@ p[0] = 6;    // 合法：指针下标是可写存储位置
 
 == 语句文法与条件约束 <sec-stmt-grammar>
 
-```ebnf
-Block = "{", { BlockItem }, "}";
-BlockItem = TypeDecl | VariableDecl | Statement;
-Statement = Block | IfStmt | WhileStmt | ForStmt | NamedStmt
-          | BreakStmt | ContinueStmt | PrintStmt
-          | ReturnStmt | TryStmt | ThrowStmt | ExprStmt | ";";
-IfStmt = "if", "(", Expr, ")", Statement,
-         [ "else", Statement ];
-WhileStmt = "while", "(", Expr, ")", Statement;
-ForStmt = "for", "(", [ ForInit ], ";", [ Expr ], ";",
-          [ Expr ], ")", Statement;
-ForInit = DeclType, Identifier, "=", Expr | Expr;
-NamedStmt = Identifier, ":", (Block | IfStmt | WhileStmt | ForStmt);
-BreakStmt = "break", [ Identifier ], ";";
-ContinueStmt = "continue", [ Identifier ], ";";
-PrintStmt = "print", Expr, ";";
-ExprStmt = Expr, ";";
-```
+简单声明与语句的文法见 @sec-grammar-simple-statements，代码块与复合语句的文法见 @sec-grammar-blocks。
 
-`ReturnStmt` 见 @sec-func-decl，`TryStmt` 与 `ThrowStmt` 见 @sec-try-catch。
+返回语句的语义约束见 @sec-func-decl，异常处理与抛出的语义约束见 @sec-try-catch。
 
 `if` 与循环仅作为语句，不产生值。`if`、`while`、`for` 的条件表达式静态类型必须为 `bool`，禁止将整数、指针或其他类型隐式转为布尔值。
 
@@ -934,16 +1126,7 @@ func main() -> void {
 
 模块顶层的 `typedef`、`class`、`func` 和变量默认仅在所属模块的全部源文件内可见；前置 `export` 后才允许其他模块显式导入，导入未导出声明为编译错误。跨模块引用必须显式书写 `import`，导入保留原声明身份（不创建新类型、新类、新变量或新函数身份）。`as` 可为导入项指定当前源文件内的本地名字；导入绑定仅在当前源文件内生效，不向同模块其他源文件或第三方模块传递（若模块 `A` 导出 `x`、模块 `B` 导入 `x`，模块 `C` 仍须直接从 `A` 导入 `x`）。同一源文件内的导入绑定之间不得重名，也不得与本模块的模块级声明重名。
 
-```ebnf
-SourceFile = ModuleDecl, { ImportDecl | TopLevelDecl }, EOF;
-ModuleDecl = "module", ModuleName, ";";
-ModuleName = Identifier, { ".", Identifier };
-ImportDecl = "import", "{", ImportItem, { ",", ImportItem }, "}",
-             "from", ModuleName, ";";
-ImportItem = Identifier, [ "as", Identifier ];
-TopLevelDecl = [ "export" ], (ExportableDecl | ImplDecl);
-ExportableDecl = TypeDecl | ClassDecl | FunctionDecl | VariableDecl;
-```
+模块、导入、顶层声明与完整源文件的文法见 @sec-grammar-source。
 
 `export` 仅允许修饰上述模块级声明以及#ref(<ch-classes>)规定的类字段、类内方法、`init` 和外部 `impl`，用于局部声明或 `import` 为编译错误。`export impl` 导出对应类方法而不产生独立的模块级函数名；`export class` 不自动导出类成员，外部模块导入类后可直接访问其带 `export` 的成员而无需单独导入方法。
 
@@ -1040,23 +1223,13 @@ func double_value(i32 value) -> i32 {
 
 普通函数仅允许模块级具名定义，不支持局部函数、匿名函数、闭包捕获或同名函数重载；参数类型与返回类型均须显式写出（类内方法与外部 `impl` 见#ref(<ch-classes>)）。
 
-```ebnf
-FunctionDecl = "func", Identifier, "(", [ Parameters ], ")",
-               "->", ReturnType, Block;
-Parameters = Parameter, { ",", Parameter };
-Parameter = DeclType, Identifier, [ "=", ConstExpr ];
-ReturnType = DeclType | "void";
-ReturnStmt = "return", [ Expr ], ";";
-```
+函数及参数声明的文法见 @sec-grammar-declarations，返回类型的写法见 @sec-grammar-expressions，返回语句的文法见 @sec-grammar-simple-statements。
 
 参数的可选默认值 `= ConstExpr` 仅允许用于类内的 `init`（@sec-class-init）；普通函数、类普通方法和外部 `impl` 的参数附加默认值为编译错误。
 
 函数指针可存入变量、作为参数传递和作为返回值返回，其类型采用 `*func` 前缀语法，仅列参数类型而不写参数名：
 
-```ebnf
-FunctionPointerType = "*", "func", "(", [ DeclType, { ",", DeclType } ],
-                      ")", "->", ReturnType;
-```
+文法定义：`FunctionPointerType` 见 @sec-grammar-expressions。
 
 `->` 右侧按完整 `ReturnType`（即 `DeclType | "void"`）解析；若需将函数指针类型作为外层联合的一个成员，须按 @sec-type-identity 先用括号包裹整个函数指针类型，如 `(*func(i32) -> i32) | null`。
 
@@ -1117,19 +1290,7 @@ class Closed {}
 
 字段与方法共用类的成员名字空间（与 @sec-names-scopes 普通声明名字空间规则一致）：同一类中字段之间、字段与方法之间（含继承成员及同模块外部 `impl` 方法）均不得重名；子类不得以字段遮蔽继承方法或以方法遮蔽继承字段（合法方法重写见 @sec-method-binding；`field as T;` 仅约束已有继承字段，不声明新成员）。
 
-```ebnf
-ClassDecl = "class", Identifier, [ "extends", ClassName ],
-            "{", { ClassMember }, "}";
-ClassMember = [ "export" ], (FieldDecl | MethodDecl | InitDecl)
-            | FieldAccessDecl;
-FieldDecl = TypeExpr, Identifier, ";";
-FieldAccessDecl = Identifier, "as", TypeExpr, ";";
-MethodDecl = FunctionDecl;
-InitDecl = "func", "init", "(", [ Parameters ], ")",
-           "->", Identifier, Block;
-ImplDecl = "impl", ClassName, ".", Identifier,
-           "(", [ Parameters ], ")", "->", ReturnType, Block;
-```
+类、类成员与外部 `impl` 声明的文法见 @sec-grammar-declarations。
 
 `InitDecl` 的返回类型标识符必须等于当前类名。`FieldDecl` 使用 `TypeExpr`，因此类字段不能按值直接嵌套类对象，须使用类指针（如 `*Node`）。
 
@@ -1271,9 +1432,7 @@ class Conflict {
 
 子类在具有当前接收者 `self` 的自身方法（含同模块合法外部 `impl` 方法）内部，可通过 `super.method(args)` 静态调用直接父类上可用且在当前位置可访问的方法（跨模块继承时目标父类方法须已 `export`）：
 
-```ebnf
-SuperCallExpr = "super", ".", Identifier, "(", [ Arguments ], ")";
-```
+文法定义：`SuperCallExpr` 见 @sec-grammar-expressions。
 
 求值 `super.method(args)` 时，先按 @sec-class-layout 的前缀复制规则从当前接收者提取 `Parent` 子对象作为首参数，再按 @sec-eval-order 从左到右求值括号内的其余实参，静态绑定至直接父类实现（`super.init` 另循 @sec-class-init 规则，不自动传入接收者）。
 
@@ -1298,9 +1457,7 @@ class Child extends Parent {
 
 `init` 是在 `class` 块内定义的关联初始化函数，签名固定为 `func init(Parameters) -> ClassName`，返回当前类的对象值，不支持同名重载。调用方通过 `ClassName.init(...)` 显式构造实例；跨模块调用 `ClassName.init(...)` 或子类中调用 `super.init(...)` 均要求目标 `init` 已标记 `export`（仅 `export class` 不自动导出 `init`）。
 
-```ebnf
-ClassInitExpr = ClassName, ".", "init", "(", [ Arguments ], ")";
-```
+文法定义：`ClassInitExpr` 见 @sec-grammar-expressions。
 
 `init` 参数允许使用编译期常量默认值 `TypeExpr name = ConstExpr`：必填参数必须全部排在带默认值的参数之前；默认值在声明处按参数类型检查并求得编译期常量，不得引用运行期参数。`ClassName.init(...)` 与 `super.init(...)` 均按位置顺序匹配实参，仅允许连续省略末尾具有默认值的参数并由编译器在调用处补齐对应常量；缺少必填参数、实参过多或用空位跳过中间参数均为编译错误。默认参数不改变底层函数签名或调用约定，显式实参仍从左到右求值；省略参数的规则只适用于上述按名调用，不使普通函数指针调用具有默认参数。
 
@@ -1342,10 +1499,7 @@ func use_token() -> void {
 
 + *委托直接父类 `init`：*使用 `super.init(...) { ... }` 构造 `Child` 实例：
 
-  ```ebnf
-  SuperInitExpr = "super", ".", "init", "(", [ Arguments ], ")", "{",
-                  [ FieldInit, { ",", FieldInit }, [ "," ] ], "}";
-  ```
+  文法定义：`SuperInitExpr` 见 @sec-grammar-expressions。
 
   ```cy
   return super.init(id) { kind: "user", child_field: val };
@@ -1361,11 +1515,7 @@ func use_token() -> void {
 
 异常机制由 `try`、`catch`、`throw` 构成：
 
-```ebnf
-TryStmt = "try", Block,
-          "catch", "(", TypeExpr, Identifier, ")", Block;
-ThrowStmt = "throw", Expr, ";";
-```
+文法定义：`TryStmt` 见 @sec-grammar-blocks；`ThrowStmt` 见 @sec-grammar-simple-statements。
 
 `throw expr;` 将异常值按值复制到运行时预留的固定容量异常存储槽，不触发隐式堆分配；匹配 `catch` 后再按值复制到接收变量。栈展开仅恢复控制流与调用栈帧，不执行局部变量隐式析构，也不自动释放动态内存。
 
