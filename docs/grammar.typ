@@ -21,9 +21,9 @@
     (name: name, meaning: meaning, code: code, deps: deps)
   }
   for line in body.split("\n") {
-    let line = line.trim()
-    if line == "" { continue }
-    let note = line.match(regex("^\(\* (.*) \*\)$"))
+    let clean = line.trim()
+    if clean == "" { continue }
+    let note = clean.match(regex("^\(\* (.*) \*\)$"))
     if note != none {
       if lines.len() > 0 {
         result.push(finish(meaning, lines))
@@ -55,6 +55,7 @@
 #let grammar-catalog(source) = {
   let blocks = ()
   let rules = (:)
+  let chapter = none
   let section = none
   let lines = none
   for line in source.split("\n") {
@@ -73,8 +74,13 @@
         lines.push(line)
       }
     } else if clean == "```ebnf" {
+      assert(chapter == "ch-grammar", message: "全部 EBNF 必须集中在第 0 章文法中")
       assert(section != none, message: "文法块必须位于带标签的小节中")
       lines = ()
+    } else if clean.starts-with("= ") {
+      let heading = clean.match(regex("<([^>]+)>$"))
+      chapter = if heading == none { none } else { heading.captures.first() }
+      section = none
     } else if clean.starts-with("== ") or clean.starts-with("=== ") {
       let heading = clean.match(regex("<([^>]+)>$"))
       if heading != none { section = heading.captures.first() }
@@ -100,87 +106,40 @@
   (blocks: blocks, rules: rules)
 }
 
-// References outside a jointly defined group always resolve to earlier groups.
-#let grammar-dependencies(names, catalog) = {
-  grammar-closure(names, catalog.rules).filter(name => name not in names)
+// Link nonterminal names in place. Terminals and prose atoms remain literal.
+#let grammar-code(code, catalog) = {
+  let tokens = regex("\"[^\"]*\"|'[^']*'|\?[^?]*\?|[A-Za-z][A-Za-z0-9]*|[^A-Za-z\"'?]+")
+  for (i, line) in code.split("\n").enumerate() {
+    if i > 0 { linebreak() }
+    for token in line.matches(tokens) {
+      let body = raw(token.text, lang: "text")
+      if token.text in catalog.rules {
+        link(label("grammar-" + token.text), body)
+      } else {
+        body
+      }
+    }
+  }
 }
 
-#let grammar-panel(it, catalog, mono, cjk, accent, pale) = {
+#let grammar-block(it, catalog, mono, cjk, accent, pale) = {
   let local = parse-rules(it.text)
   let names = local.map(rule => rule.name)
   let current = catalog.rules.at(names.first()).block
   assert(names == catalog.blocks.at(current), message: "显示文法与源文法不一致")
-  let deps = grammar-dependencies(names, catalog)
-  let direct = local.map(rule => rule.deps).flatten()
-  metadata((kind: "grammar-dependencies", roots: names, dependencies: deps))
-
-  let recursive = local.any(rule => rule.deps.any(dep =>
-    catalog.rules.at(dep).order > catalog.rules.at(rule.name).order))
-  if recursive {
-    // Introduce every name before the mutually recursive definitions.
-    block(above: 0.8em, below: 0.4em, sticky: true)[
-      #text(font: cjk, size: 9pt, weight: "bold", fill: accent, "本组共同定义的名称")
+  metadata((kind: "grammar-group", roots: names))
+  set par(justify: false, leading: 0.45em, spacing: 0pt)
+  set text(font: (mono, cjk), size: 8.5pt, hyphenate: false)
+  set smartquote(enabled: false)
+  // Each definition keeps its explanation; the group can break between rules.
+  for rule in local {
+    [#block(width: 100%, breakable: false, fill: pale, inset: 8pt,
+      radius: 2pt, above: 4pt, below: 4pt)[
+      #metadata((kind: "grammar-rule", name: rule.name, dependencies: rule.deps))
+      #text(font: cjk, size: 9pt, fill: accent, rule.meaning)
+      #linebreak()
+      #grammar-code(rule.code, catalog)
     ]
-    grid(
-      columns: (auto, 1fr),
-      column-gutter: 10pt,
-      row-gutter: 3pt,
-      ..local.map(rule => (
-        link(label("grammar-" + rule.name), text(font: mono, size: 8pt, rule.name)),
-        text(font: cjk, size: 8pt, rule.meaning),
-      )).flatten(),
-    )
+    #label("grammar-" + rule.name)]
   }
-
-  let main = {
-    set par(justify: false, leading: 0.4em, spacing: 0pt)
-    set text(font: (mono, cjk), size: 8pt, hyphenate: false)
-    set smartquote(enabled: false)
-    for rule in local {
-      block(breakable: false, above: 0pt, below: 7pt)[
-        #text(font: cjk, size: 8pt, fill: accent, rule.meaning)
-        #linebreak()
-        #for (i, line) in rule.code.split("\n").enumerate() {
-          if i > 0 { linebreak() }
-          text(line)
-        }
-        #label("grammar-" + rule.name)
-      ]
-    }
-  }
-  let sidebar = {
-    set text(font: cjk, size: 7.5pt)
-    set par(justify: false, leading: 0.3em, spacing: 0pt)
-    set smartquote(enabled: false)
-    if deps.len() == 0 {
-      [本块所需文法均已就地列出。]
-    } else {
-      for name in deps {
-        let rule = catalog.rules.at(name)
-        block(breakable: false, above: 0pt, below: 4pt)[
-          #link(label("grammar-" + name), text(font: mono, size: 7.5pt, name))
-          #text(fill: accent, if name in direct { "直接" } else { "间接" })
-          #linebreak()
-          #rule.meaning #ref(label(rule.section))
-          #linebreak()
-          #text(font: (mono, cjk), size: 7pt, hyphenate: false, rule.code.split("\n").join(" "))
-        ]
-      }
-    }
-  }
-  // The cells may continue onto following pages; never shrink the whole block.
-  block(width: 100%, breakable: true, above: 0.8em, below: 0.8em)[
-    #grid(
-      columns: (1.65fr, 1fr),
-      column-gutter: 7pt,
-      inset: 7pt,
-      fill: (x, y) => if x == 0 { pale } else { rgb("f5f8f8") },
-      grid.header(
-        text(font: cjk, size: 8pt, weight: "bold", fill: accent, "文法与中文说明"),
-        text(font: cjk, size: 8pt, weight: "bold", fill: accent, "递归依赖速查"),
-      ),
-      grid.cell(breakable: true, main),
-      grid.cell(breakable: true, sidebar),
-    )
-  ]
 }
