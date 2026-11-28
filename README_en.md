@@ -19,6 +19,8 @@ Cyly cares more about what a program actually does than about how many details i
 
 The initial language design is complete, but a full compiler implementation has not begun. Early frontend code in the repository is exploratory rather than a usable language implementation.
 
+The [language examples](examples/README.md) (documented in Chinese) cover syntax, types, control flow, functions, classes, modules, and exceptions, including programs spanning multiple files and examples that must be rejected. They have not been validated by a full compiler and cannot yet be executed by the current tools.
+
 ## Design document
 
 The [language specification draft](docs/language-spec.typ) (in Chinese) is the authoritative record of the language's syntax, semantics, and runtime rules. The earlier [design decisions](old/DESIGN_DECISIONS.md) (in Chinese) are archived for reference only; where they differ, the specification prevails.
